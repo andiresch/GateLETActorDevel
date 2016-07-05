@@ -98,12 +98,12 @@ protected:
   
   bool mIsDoseAveragedDEDXAveraged;
   bool mIsDoseAveragedEdepDXAveraged;
-  
+  bool mIsFluence;
   GateImageDouble mLETTempImage;
-  GateImageInt mNumberOfHitsImage;
+  GateImageDouble mNumberOfHitsImage;
   GateImageInt mLastHitEventImage;
   bool mIsRelUncertEnabled;
-  
+  bool mIsNumberOfHits;
   GateImageDouble mRelUncertImage;
   
   bool mIsParallelCalculationEnabled;

@@ -34,6 +34,8 @@ GateLETActor::GateLETActor(G4String name, G4int depth):
   mIsTrackAveragedDXAveragedCancelled=false;
   mIsDoseAveragedDEDXAveraged=false;
   mIsTrackAveragedFluenceTrackAveraged = false;
+  mIsFluence=false;
+  mIsNumberOfHits=false;
   mIsDoseAveragedEdepDXAveraged=false;
   
   mIsRelUncertEnabled = false;
@@ -81,6 +83,8 @@ void GateLETActor::Construct() {
   else if (mAveragingType == "TrackAveragedFluenceStep"){mIsTrackAveragedFluenceAveraged = true;}
   else if (mAveragingType == "TrackAveragedCancelled"){mIsTrackAveragedDXAveragedCancelled = true;}
   else if (mAveragingType == "TrackAveragedFluenceTrack"){mIsTrackAveragedFluenceTrackAveraged = true;}
+  else if (mAveragingType == "Fluence"){mIsFluence = true;}
+  else if (mAveragingType == "NumberOfHits"){mIsNumberOfHits=true;}
   else if (mAveragingType == "TrackAveraged" || mAveragingType == "TrackAverage" || mAveragingType == "Track" || mAveragingType == "track" || mAveragingType == "TrackAveragedDXAveraged"){mIsTrackAveragedDXAveraged = true;}
   else if (mAveragingType == "DoseAveragedEdep"){mIsDoseAveragedEdepDXAveraged = true;}
   
@@ -132,7 +136,7 @@ void GateLETActor::Construct() {
 	  mRelUncertImage.SetResolutionAndHalfSize(mResolution, mHalfSize, mPosition);
 	  mRelUncertImage.Allocate();
   }
-  if (mIsTrackAveragedFluenceTrackAveraged) {
+  if (mIsTrackAveragedFluenceTrackAveraged || mIsFluence || mIsNumberOfHits) {
 	  mLastHitEventImage.SetResolutionAndHalfSize(mResolution, mHalfSize, mPosition);
 	  mLastHitEventImage.Allocate();
 	  
@@ -210,16 +214,28 @@ void GateLETActor::SaveData() {
 		//mLETFilename= removeExtension(mSaveFilename) + "-doseToWater."+ getExtension(mSaveFilename);
 		////G4cout <<"LET filename:" << mLETFilename << G4endl;
 	  //}
-	  GateImageDouble::const_iterator iter_LET = mLETImage.begin();
-	  GateImageDouble::const_iterator iter_Edep = mEdepImage.begin();
-	  GateImageDouble::iterator iter_Final = mFinalImage.begin();
-	  for(iter_LET = mLETImage.begin(); iter_LET != mLETImage.end(); iter_LET++) {
-		if (*iter_Edep == 0.0) *iter_Final = 0.0; // do not divide by zero
-		else *iter_Final = (*iter_LET)/(*iter_Edep);
-		iter_Edep++;
-		iter_Final++;
+	  if (mIsFluence || mIsNumberOfHits)
+	  	  {
+		  G4cout<<"write number of hits image" <<G4endl;
+		  mNumberOfHitsImage.Write(mLETFilename);
 	  }
-	  mFinalImage.Write(mLETFilename);
+	  else
+	  {
+		  GateImageDouble::const_iterator iter_LET = mLETImage.begin();
+		  GateImageDouble::const_iterator iter_Edep = mEdepImage.begin();
+		  GateImageDouble::iterator iter_Final = mFinalImage.begin();
+		  for(iter_LET = mLETImage.begin(); iter_LET != mLETImage.end(); iter_LET++) {
+			if (*iter_Edep == 0.0) *iter_Final = 0.0; // do not divide by zero
+			else *iter_Final = (*iter_LET)/(*iter_Edep);
+			iter_Edep++;
+			iter_Final++;
+			
+		  }
+		  mFinalImage.Write(mLETFilename);
+	  }
+
+
+	  
  
   uncertaintyFilename = removeExtension(mLETFilename) + "-variance."+ getExtension(mLETFilename);
   if (mIsLETUncertaintyImageEnabled)
@@ -261,11 +277,11 @@ void GateLETActor::ResetData() {
 	  mRelUncertImage.Fill(0.0);
   }
   
-  if (mIsTrackAveragedFluenceTrackAveraged) {
+  if (mIsTrackAveragedFluenceTrackAveraged || mIsFluence || mIsNumberOfHits) {
 		  
 	  mLETTempImage.Fill(0.0);
 	  mNumberOfHitsImage.Fill(0);
-	  mLastHitEventImage.Fill(0);
+	  mLastHitEventImage.Fill(-1);
   }
   
   //mTestImage.Reset();
@@ -412,6 +428,48 @@ void GateLETActor::UserSteppingActionInVoxel(const int index, const G4Step* step
 	  //doseAveragedLET=edep;
 	  //normalizationVal = steplength;
   }  
+   else if (mIsFluence){
+	  //if (index > 8 && index < 10) {
+	  //G4cout<<"lastHit :      "<<mLastHitEventImage.GetValue(index) <<G4endl;
+	  //G4cout<<"mCurrentEvent: "<<mCurrentEvent<<G4endl;
+	  //G4cout<<"mIndex:        "<<index<<G4endl;
+	    if ( mLastHitEventImage.GetValue(index) != mCurrentEvent){
+			//mLETTempImage.AddValue(index, dedx);
+			
+			mLastHitEventImage.SetValue(index, mCurrentEvent);
+			//G4cout<<"lastHit = mCurrentEvent"<<G4endl;
+			//G4cout<<"parentID" << step->GetTrack()->GetParentID()<<G4endl << G4endl;
+			G4ThreeVector momentumDirection=step->GetTrack()->GetMomentumDirection();
+			//double dx=momentumDirection.x();
+			//double dy=momentumDirection.y();
+			double dz=momentumDirection.z();
+			mNumberOfHitsImage.AddValue(index, dz);
+			//G4cout<<"dz: " << dz <<G4endl;
+			//G4cout<<"sq: " << dx*dx*+dy*dy+dz*dz <<G4endl;
+		}
+		
+	}
+	   else if (mIsNumberOfHits){
+	  //if (index > 8 && index < 10) {
+	  //G4cout<<"lastHit :      "<<mLastHitEventImage.GetValue(index) <<G4endl;
+	  //G4cout<<"mCurrentEvent: "<<mCurrentEvent<<G4endl;
+	  //G4cout<<"mIndex:        "<<index<<G4endl;
+	    if ( mLastHitEventImage.GetValue(index) != mCurrentEvent){
+			//mLETTempImage.AddValue(index, dedx);
+			
+			mLastHitEventImage.SetValue(index, mCurrentEvent);
+			//G4cout<<"lastHit = mCurrentEvent"<<G4endl;
+			//G4cout<<"parentID" << step->GetTrack()->GetParentID()<<G4endl << G4endl;
+			//G4ThreeVector momentumDirection=step->GetTrack()->GetMomentumDirection();
+			////double dx=momentumDirection.x();
+			////double dy=momentumDirection.y();
+			//double dz=momentumDirection.z();
+			mNumberOfHitsImage.AddValue(index, 1);
+			//G4cout<<"dz: " << dz <<G4endl;
+			//G4cout<<"sq: " << dx*dx*+dy*dy+dz*dz <<G4endl;
+		}
+		
+	}
   else if (mIsTrackAveragedFluenceTrackAveraged){
 	  //if (index > 8 && index < 10) {
 	  //G4cout<<"mCurrentEvent: "<<mCurrentEvent<<G4endl;
